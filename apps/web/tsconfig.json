@@ -1,0 +1,17 @@
+{
+  "extends": "@ledgerline/config/tsconfig.next.json",
+  "compilerOptions": {
+    "paths": { "@/*": ["./src/*"] },
+    "types": ["node", "vitest/globals", "@testing-library/jest-dom"]
+  },
+  "include": [
+    "next-env.d.ts",
+    "src",
+    "e2e",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts",
+    "*.ts",
+    "eslint.config.js"
+  ],
+  "exclude": ["node_modules"]
+}

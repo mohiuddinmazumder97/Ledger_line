@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ledgerline
+          POSTGRES_PASSWORD: ledgerline
+          POSTGRES_DB: ledgerline_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U ledgerline -d ledgerline_test"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://ledgerline:ledgerline@localhost:5432/ledgerline_test
+      WEB_ORIGIN: http://localhost:3000
+      API_URL: http://localhost:4000
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - name: Migrations apply and the seed reproduces the prototype balances
+        run: pnpm --filter @ledgerline/api db:deploy && pnpm db:seed
+      - name: OpenAPI spec is up to date
+        run: pnpm gen:api && git diff --exit-code apps/api/openapi.json

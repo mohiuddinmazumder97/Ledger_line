@@ -1,0 +1,414 @@
+// Ledgerline data model — see docs/SPEC.md §2.
+//
+// Money: BigInt minor units + ISO-4217 `currency` (Char(3)). FX: Decimal(18,8).
+// Balances are derived (opening balance + ledger), never stored.
+// Check constraints and the pg_trgm extension live in raw SQL migrations.
+
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "esm"
+  importFileExtension = "js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum AccountKind {
+  BANK
+  SAVINGS
+  CASH
+  CREDIT
+  INVESTMENT
+
+  @@map("account_kind")
+}
+
+enum CategoryType {
+  EXPENSE
+  INCOME
+
+  @@map("category_type")
+}
+
+enum TransactionType {
+  EXPENSE
+  INCOME
+  TRANSFER
+
+  @@map("transaction_type")
+}
+
+/// AUTO = counts toward the budget of its category; NONE = counts toward no budget;
+/// EXPLICIT = counts toward `budgetId`. Mirrors the API's `budgetId | 'auto' | null`.
+enum BudgetMode {
+  AUTO
+  NONE
+  EXPLICIT
+
+  @@map("budget_mode")
+}
+
+enum Frequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  YEARLY
+
+  @@map("frequency")
+}
+
+enum BudgetPeriod {
+  MONTHLY
+
+  @@map("budget_period")
+}
+
+enum DebtDirection {
+  LENT
+  BORROWED
+
+  @@map("debt_direction")
+}
+
+enum Theme {
+  LIGHT
+  DARK
+  SYSTEM
+
+  @@map("theme")
+}
+
+enum DashboardLayout {
+  OVERVIEW
+  SPLIT
+  CALENDAR
+
+  @@map("dashboard_layout")
+}
+
+enum DrawerStyle {
+  FORM
+  KEYPAD
+
+  @@map("drawer_style")
+}
+
+// ─── Identity ────────────────────────────────────────────────────────────────
+
+model User {
+  id              String          @id @default(uuid(7)) @db.Uuid
+  name            String
+  email           String          @unique
+  passwordHash    String          @map("password_hash")
+  baseCurrency    String          @default("USD") @map("base_currency") @db.Char(3)
+  theme           Theme           @default(SYSTEM)
+  dashboardLayout DashboardLayout @default(OVERVIEW) @map("dashboard_layout")
+  /// IANA zone; decides month boundaries in reports.
+  timezone        String          @default("UTC")
+  /// null = client default (web: FORM, mobile: KEYPAD).
+  drawerStyle     DrawerStyle?    @map("drawer_style")
+  onboardedAt     DateTime?       @map("onboarded_at") @db.Timestamptz(3)
+  createdAt       DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  sessions       Session[]
+  accounts       Account[]
+  categories     Category[]
+  subcategories  Subcategory[]
+  transactions   Transaction[]
+  tags           Tag[]
+  recurringRules RecurringRule[]
+  budgets        Budget[]
+  goals          Goal[]
+  debts          Debt[]
+
+  @@map("users")
+}
+
+model Session {
+  id         String    @id @default(uuid(7)) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  /// Hex SHA-256 of the 32-byte random token; the token itself is never stored.
+  tokenHash  String    @unique @map("token_hash") @db.Char(64)
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(3)
+  lastUsedAt DateTime  @default(now()) @map("last_used_at") @db.Timestamptz(3)
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(3)
+  userAgent  String?   @map("user_agent")
+  ip         String?
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+// ─── Ledger ──────────────────────────────────────────────────────────────────
+
+model Account {
+  id                  String      @id @default(uuid(7)) @db.Uuid
+  userId              String      @map("user_id") @db.Uuid
+  name                String
+  kind                AccountKind
+  currency            String      @db.Char(3)
+  /// Balance before the first ledger row. Derived balance = this + ledger.
+  openingBalanceMinor BigInt      @default(0) @map("opening_balance_minor")
+  showOnDashboard     Boolean     @default(true) @map("show_on_dashboard")
+  sortOrder           Int         @default(0) @map("sort_order")
+  /// Only set when the derived balance is exactly zero.
+  archivedAt          DateTime?   @map("archived_at") @db.Timestamptz(3)
+  createdAt           DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions      Transaction[]   @relation("TransactionAccount")
+  incomingTransfers Transaction[]   @relation("TransactionToAccount")
+  recurringRules    RecurringRule[] @relation("RecurringRuleAccount")
+  recurringIncoming RecurringRule[] @relation("RecurringRuleToAccount")
+
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Category {
+  id         String       @id @default(uuid(7)) @db.Uuid
+  userId     String       @map("user_id") @db.Uuid
+  name       String
+  type       CategoryType
+  sortOrder  Int          @default(0) @map("sort_order")
+  archivedAt DateTime?    @map("archived_at") @db.Timestamptz(3)
+  createdAt  DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subcategories  Subcategory[]
+  transactions   Transaction[]
+  recurringRules RecurringRule[]
+  budgets        Budget[]
+
+  @@index([userId])
+  @@map("categories")
+}
+
+model Subcategory {
+  id                  String   @id @default(uuid(7)) @db.Uuid
+  /// Denormalised owner so every query can be scoped by userId directly.
+  userId              String   @map("user_id") @db.Uuid
+  categoryId          String   @map("category_id") @db.Uuid
+  name                String
+  sortOrder           Int      @default(0) @map("sort_order")
+  /// Excluded from the heatmap and "largest purchase" (true for the Rent template).
+  excludeFromInsights Boolean  @default(false) @map("exclude_from_insights")
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category       Category        @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  transactions   Transaction[]
+  recurringRules RecurringRule[]
+
+  @@index([categoryId])
+  @@index([userId])
+  @@map("subcategories")
+}
+
+model Transaction {
+  id              String          @id @default(uuid(7)) @db.Uuid
+  userId          String          @map("user_id") @db.Uuid
+  type            TransactionType
+  accountId       String          @map("account_id") @db.Uuid
+  /// Always positive; the type decides the sign.
+  amountMinor     BigInt          @map("amount_minor")
+  /// = the account's currency.
+  currency        String          @db.Char(3)
+  occurredAt      DateTime        @map("occurred_at") @db.Timestamptz(3)
+  /// Short title / merchant.
+  note            String          @default("")
+  description     String          @default("")
+  categoryId      String?         @map("category_id") @db.Uuid
+  subcategoryId   String?         @map("subcategory_id") @db.Uuid
+  budgetMode      BudgetMode      @default(AUTO) @map("budget_mode")
+  budgetId        String?         @map("budget_id") @db.Uuid
+  goalId          String?         @map("goal_id") @db.Uuid
+  receiptKey      String?         @map("receipt_key")
+  recurringRuleId String?         @map("recurring_rule_id") @db.Uuid
+  splitGroupId    String?         @map("split_group_id") @db.Uuid
+  // Transfer-only
+  toAccountId     String?         @map("to_account_id") @db.Uuid
+  toAmountMinor   BigInt?         @map("to_amount_minor")
+  /// Units of the destination currency per 1 unit of the source; null when currencies match.
+  fxRate          Decimal?        @map("fx_rate") @db.Decimal(18, 8)
+  deletedAt       DateTime?       @map("deleted_at") @db.Timestamptz(3)
+  createdAt       DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account       Account          @relation("TransactionAccount", fields: [accountId], references: [id], onDelete: Restrict)
+  toAccount     Account?         @relation("TransactionToAccount", fields: [toAccountId], references: [id], onDelete: Restrict)
+  category      Category?        @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  subcategory   Subcategory?     @relation(fields: [subcategoryId], references: [id], onDelete: Restrict)
+  budget        Budget?          @relation(fields: [budgetId], references: [id], onDelete: SetNull)
+  goal          Goal?            @relation(fields: [goalId], references: [id], onDelete: Restrict)
+  recurringRule RecurringRule?   @relation(fields: [recurringRuleId], references: [id], onDelete: SetNull)
+  tags          TransactionTag[]
+
+  @@index([userId, occurredAt(sort: Desc), id])
+  @@index([userId, accountId])
+  @@index([userId, toAccountId])
+  @@index([userId, categoryId])
+  @@index([splitGroupId])
+  // Trigram search (pg_trgm is enabled in the init migration).
+  @@index([note(ops: raw("gin_trgm_ops"))], type: Gin, map: "transactions_note_trgm_idx")
+  @@index([description(ops: raw("gin_trgm_ops"))], type: Gin, map: "transactions_description_trgm_idx")
+  @@map("transactions")
+}
+
+model Tag {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  name      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions TransactionTag[]
+
+  @@unique([userId, name])
+  @@map("tags")
+}
+
+model TransactionTag {
+  transactionId String   @map("transaction_id") @db.Uuid
+  tagId         String   @map("tag_id") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  tag         Tag         @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([transactionId, tagId])
+  @@index([tagId])
+  @@map("transaction_tags")
+}
+
+/// Template of a transaction. The record saved with "Repeat" on is occurrence #1;
+/// `nextRunAt` = its occurredAt + 1 period, clamped to month end against `anchorAt`'s day.
+model RecurringRule {
+  id            String          @id @default(uuid(7)) @db.Uuid
+  userId        String          @map("user_id") @db.Uuid
+  type          TransactionType
+  accountId     String          @map("account_id") @db.Uuid
+  amountMinor   BigInt          @map("amount_minor")
+  currency      String          @db.Char(3)
+  note          String          @default("")
+  description   String          @default("")
+  categoryId    String?         @map("category_id") @db.Uuid
+  subcategoryId String?         @map("subcategory_id") @db.Uuid
+  budgetMode    BudgetMode      @default(AUTO) @map("budget_mode")
+  budgetId      String?         @map("budget_id") @db.Uuid
+  goalId        String?         @map("goal_id") @db.Uuid
+  toAccountId   String?         @map("to_account_id") @db.Uuid
+  tagNames      String[]        @default([]) @map("tag_names")
+  frequency     Frequency
+  /// occurredAt of occurrence #1; its day-of-month drives month-end clamping.
+  anchorAt      DateTime        @map("anchor_at") @db.Timestamptz(3)
+  nextRunAt     DateTime        @map("next_run_at") @db.Timestamptz(3)
+  active        Boolean         @default(true)
+  createdAt     DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account      Account       @relation("RecurringRuleAccount", fields: [accountId], references: [id], onDelete: Restrict)
+  toAccount    Account?      @relation("RecurringRuleToAccount", fields: [toAccountId], references: [id], onDelete: Restrict)
+  category     Category?     @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  subcategory  Subcategory?  @relation(fields: [subcategoryId], references: [id], onDelete: Restrict)
+  budget       Budget?       @relation(fields: [budgetId], references: [id], onDelete: SetNull)
+  goal         Goal?         @relation(fields: [goalId], references: [id], onDelete: SetNull)
+  transactions Transaction[]
+
+  @@index([userId])
+  @@index([active, nextRunAt])
+  @@map("recurring_rules")
+}
+
+// ─── Planning ────────────────────────────────────────────────────────────────
+
+model Budget {
+  id         String       @id @default(uuid(7)) @db.Uuid
+  userId     String       @map("user_id") @db.Uuid
+  categoryId String       @map("category_id") @db.Uuid
+  limitMinor BigInt       @map("limit_minor")
+  /// The user's base currency when the budget was created.
+  currency   String       @db.Char(3)
+  period     BudgetPeriod @default(MONTHLY)
+  createdAt  DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category       Category        @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  transactions   Transaction[]
+  recurringRules RecurringRule[]
+
+  @@unique([userId, categoryId])
+  @@map("budgets")
+}
+
+model Goal {
+  id                String    @id @default(uuid(7)) @db.Uuid
+  userId            String    @map("user_id") @db.Uuid
+  name              String
+  targetMinor       BigInt    @map("target_minor")
+  /// The user's base currency when the goal was created.
+  currency          String    @db.Char(3)
+  /// Saved = this + sum of linked transactions.
+  initialSavedMinor BigInt    @default(0) @map("initial_saved_minor")
+  /// Month precision: always the 1st of a month.
+  targetDate        DateTime? @map("target_date") @db.Date
+  archivedAt        DateTime? @map("archived_at") @db.Timestamptz(3)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions   Transaction[]
+  recurringRules RecurringRule[]
+
+  @@index([userId])
+  @@map("goals")
+}
+
+model Debt {
+  id          String        @id @default(uuid(7)) @db.Uuid
+  userId      String        @map("user_id") @db.Uuid
+  person      String
+  direction   DebtDirection
+  amountMinor BigInt        @map("amount_minor")
+  currency    String        @db.Char(3)
+  note        String        @default("")
+  dueDate     DateTime?     @map("due_date") @db.Date
+  settledAt   DateTime?     @map("settled_at") @db.Timestamptz(3)
+  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("debts")
+}
+
+/// USD→X only (`rate` = units of `quote` per 1 USD). Cross rates go through USD.
+model ExchangeRate {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  quote     String   @db.Char(3)
+  rate      Decimal  @db.Decimal(18, 8)
+  date      DateTime @db.Date
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@unique([quote, date])
+  @@map("exchange_rates")
+}

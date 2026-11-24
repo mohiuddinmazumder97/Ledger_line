@@ -1,0 +1,27 @@
+{
+  "name": "ledgerline",
+  "private": true,
+  "packageManager": "pnpm@11.22.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "e2e": "turbo run e2e",
+    "format": "prettier --write .",
+    "db:migrate": "pnpm --filter @ledgerline/api db:migrate",
+    "db:seed": "pnpm --filter @ledgerline/api db:seed",
+    "db:reset": "pnpm --filter @ledgerline/api db:reset",
+    "gen:api": "pnpm --filter @ledgerline/api openapi:write && echo 'orval client generation is added in phase 4'"
+  },
+  "devDependencies": {
+    "@ledgerline/config": "workspace:*",
+    "prettier": "^3.10.1",
+    "turbo": "2.11.13",
+    "typescript": "6.0.3"
+  }
+}

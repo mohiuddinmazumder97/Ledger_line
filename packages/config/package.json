@@ -1,0 +1,24 @@
+{
+  "name": "@ledgerline/config",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./tsconfig.base.json": "./tsconfig.base.json",
+    "./tsconfig.nest.json": "./tsconfig.nest.json",
+    "./tsconfig.next.json": "./tsconfig.next.json",
+    "./eslint": "./eslint/base.js",
+    "./eslint/next": "./eslint/next.js",
+    "./prettier": "./prettier.config.js"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3"
+  },
+  "dependencies": {
+    "@eslint/js": "^9.39.5",
+    "eslint": "9.39.5",
+    "eslint-config-next": "16.4.6",
+    "eslint-config-prettier": "^10.1.8",
+    "typescript-eslint": "^8.73.0"
+  }
+}

@@ -1,0 +1,5 @@
+{
+  "extends": "@ledgerline/config/tsconfig.base.json",
+  "compilerOptions": { "module": "esnext", "moduleResolution": "bundler", "noEmit": true },
+  "include": ["src", "eslint.config.js"]
+}

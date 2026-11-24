@@ -1,0 +1,15 @@
+{
+  "$schema": "https://turborepo.com/schema.json",
+  "ui": "stream",
+  "tasks": {
+    "build": { "dependsOn": ["^build"], "outputs": ["dist/**", ".next/**", "!.next/cache/**"] },
+    "dev": { "cache": false, "persistent": true },
+    "lint": { "dependsOn": ["^build"] },
+    "typecheck": { "dependsOn": ["^build"] },
+    "test": {
+      "dependsOn": ["^build"],
+      "env": ["DATABASE_URL", "DIRECT_URL", "WEB_ORIGIN", "PORT", "SEED_TODAY"]
+    },
+    "e2e": { "cache": false }
+  }
+}

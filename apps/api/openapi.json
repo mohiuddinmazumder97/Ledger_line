@@ -1,0 +1,54 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/api/health": {
+      "get": {
+        "operationId": "getHealth",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Liveness check",
+        "tags": [
+          "health"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "Ledgerline API",
+    "description": "Personal finance tracker API. Money amounts are strings of integer minor units (e.g. \"125050\" = 1,250.50 in a 2-decimal currency), never JSON numbers; FX rates are decimal strings.",
+    "version": "0.1.0",
+    "contact": {}
+  },
+  "tags": [],
+  "servers": [],
+  "components": {
+    "schemas": {
+      "HealthDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ],
+            "example": "ok"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      }
+    }
+  }
+}
