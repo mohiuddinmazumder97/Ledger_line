@@ -10,6 +10,7 @@ import { TZDate } from '@date-fns/tz';
 import { PrismaPg } from '@prisma/adapter-pg';
 import argon2 from 'argon2';
 import { type Prisma, PrismaClient } from '../src/generated/prisma/client.js';
+import { excludeFromInsightsByDefault } from '../src/categories/category-templates.js';
 import {
   ACCOUNTS,
   type AccountKey,
@@ -18,7 +19,6 @@ import {
   type CategoryKey,
   DEBTS,
   DEFAULT_SEED_TODAY,
-  EXCLUDE_FROM_INSIGHTS,
   genTx,
   GOALS,
   type GoalKey,
@@ -112,14 +112,14 @@ async function main(): Promise<void> {
             userId,
             name,
             sortOrder: j,
-            excludeFromInsights: EXCLUDE_FROM_INSIGHTS.has(`${c.name}/${name}`),
+            excludeFromInsights: excludeFromInsightsByDefault(c.id, name),
           })),
         },
       },
       include: { subcategories: true },
     });
-    categoryIds[c.key] = category.id;
-    for (const s of category.subcategories) subcategoryIds.set(`${c.key}/${s.name}`, s.id);
+    categoryIds[c.id] = category.id;
+    for (const s of category.subcategories) subcategoryIds.set(`${c.id}/${s.name}`, s.id);
   }
   const subId = (category: CategoryKey, name: string) => {
     const id = subcategoryIds.get(`${category}/${name}`);

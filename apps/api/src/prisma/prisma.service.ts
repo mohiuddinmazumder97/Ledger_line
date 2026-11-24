@@ -1,3 +1,4 @@
+import '../common/net-defaults.js';
 import { Injectable, type OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaPg } from '@prisma/adapter-pg';

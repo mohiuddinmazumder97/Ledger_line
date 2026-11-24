@@ -1,18 +1,18 @@
 # Progress
 
-| Phase                                          | Status      | Date       | Notes                                                                                                                               |
-| ---------------------------------------------- | ----------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| 0 Foundations                                  | done        | 2026-11-24 | Monorepo, Nest + Next wired, health + Swagger, CI. Docker compose written but not run locally (no Docker on dev machine).           |
-| 1 Database & seed                              | done        | 2026-11-24 | Prisma 7 schema + migrations, money utils, BigInt→string, seed + golden test. Seeded on Neon; derived balances match the prototype. |
-| 2 Auth & onboarding API                        | not started |            |                                                                                                                                     |
-| 3 Ledger API                                   | not started |            |                                                                                                                                     |
-| 4 Planning, reports & recurring API            | not started |            |                                                                                                                                     |
-| 5 Web foundation & auth UI                     | not started |            |                                                                                                                                     |
-| 6 Dashboard & Accounts                         | not started |            |                                                                                                                                     |
-| 7a New record drawer (create)                  | not started |            |                                                                                                                                     |
-| 7b Transactions list, edit & delete            | not started |            |                                                                                                                                     |
-| 8 Budgets, Goals, Debts, Categories, Settings  | not started |            |                                                                                                                                     |
-| 9 Receipts, password reset, hardening & deploy | not started |            |                                                                                                                                     |
+| Phase                                          | Status      | Date       | Notes                                                                                                                                                 |
+| ---------------------------------------------- | ----------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0 Foundations                                  | done        | 2026-11-24 | Monorepo, Nest + Next wired, health + Swagger, CI. Docker compose written but not run locally (no Docker on dev machine).                             |
+| 1 Database & seed                              | done        | 2026-11-24 | Prisma 7 schema + migrations, money utils, BigInt→string, seed + golden test. Seeded on Neon; derived balances match the prototype.                   |
+| 2 Auth & onboarding API                        | done        | 2026-11-24 | Opaque DB sessions (cookie + bearer), register/login/logout(-all), throttling, me/settings, onboarding, assertOwned. 132 API tests on a Neon test DB. |
+| 3 Ledger API                                   | not started |            |                                                                                                                                                       |
+| 4 Planning, reports & recurring API            | not started |            |                                                                                                                                                       |
+| 5 Web foundation & auth UI                     | not started |            |                                                                                                                                                       |
+| 6 Dashboard & Accounts                         | not started |            |                                                                                                                                                       |
+| 7a New record drawer (create)                  | not started |            |                                                                                                                                                       |
+| 7b Transactions list, edit & delete            | not started |            |                                                                                                                                                       |
+| 8 Budgets, Goals, Debts, Categories, Settings  | not started |            |                                                                                                                                                       |
+| 9 Receipts, password reset, hardening & deploy | not started |            |                                                                                                                                                       |
 
 ## Decisions
 
@@ -80,13 +80,42 @@ Phase 1 (2026-11-24):
 - CI applies migrations (`db:deploy`) and runs the seed against its Postgres service — the balance check runs on every push.
 - pnpm build allowlist extended: `@prisma/engines`, `prisma`, `argon2` (native), `esbuild` (tsx).
 
+Phase 2 (2026-11-24):
+
+- Test DB is a separate Neon database `ledgerline_test` on the same project (user's choice over local Postgres), reached via the direct host. `TEST_DATABASE_URL` in `apps/api/.env`; falls back to local `ledgerline_test` (CI). A global setup runs `prisma migrate deploy` and refuses any DB not named `*_test` or equal to the dev `DATABASE_URL`; vitest pins `DIRECT_URL` to the test URL too so the CLI can never pick up the dev one. Tables are truncated before each test; files run serially. Full suite ≈ 3.5 min against Neon (fast locally/CI).
+- Every API test run now needs the test DB (the global setup migrates it), including the pure unit specs.
+- Responses for register/login share one schema `{ user, token?, expiresAt? }`; token fields only with `X-Client: native` (then no cookie).
+- Error bodies are `{ statusCode, code, message }` everywhere — `apiError()` helper; ValidationPipe uses code `VALIDATION_FAILED`; throttling `TOO_MANY_REQUESTS`; guard `UNAUTHENTICATED` (no token) vs `SESSION_INVALID` (unknown / expired / revoked).
+- `EMAIL_IN_USE` (409) on register reveals that an account exists — unavoidable without email verification (see Later).
+- Category templates live in `src/categories/category-templates.ts` (prototype ids `food` … `interest`); the seed imports them — one source. Onboarding creates categories in template order regardless of request order; an empty template list is allowed (prototype lets you deselect all).
+- Onboarding claims `onboardedAt` with a conditional `updateMany` inside the transaction, so a double submit yields one 201 and one 409 (tested).
+- `assertOwned(prisma | tx, model, id, userId)` → 404 `<MODEL>_NOT_FOUND`; another user's row is indistinguishable from a missing one; malformed ids are 404, not a DB error; soft-deleted transactions count as missing.
+- `PrismaService` imports the Node connect-timeout default too (tests and any entry point get it).
+- `@nestjs/throttler` 6.8 with an in-memory store, applied only to login/register via `AuthThrottlerGuard`.
+
+### Security notes (phase 2)
+
+- **Tokens:** 32 bytes from `crypto.randomBytes`, base64url (43 chars). Only `sha256(token)` (hex) is stored, unique-indexed; the raw token exists only in the response that issues it and on the client. SHA-256 (not argon2) is right for 256-bit random tokens. Tokens longer than 128 chars are rejected before hashing.
+- **Passwords:** argon2id (library defaults: m=64 MiB, t=3, p=4), 8–256 chars. Unknown emails are verified against a dummy hash so both failure paths cost one argon2 verify and return the same 401 `INVALID_CREDENTIALS` "Email or password is incorrect".
+- **Cookie `session`:** `HttpOnly`, `SameSite=Lax`, `Path=/`, `Secure` when `NODE_ENV=production`, `Max-Age` = remaining session lifetime (≈30 days), re-issued when the expiry slides. Cleared on logout, logout-all, and when a cookie's session is invalid. CSRF: `SameSite=Lax` means cross-site POST/PATCH never carry the cookie; all state changes are non-GET JSON endpoints.
+- **Sliding expiry:** 30 days from last use; the DB write (`expiresAt`, `lastUsedAt`) happens at most once per hour per session, so `lastUsedAt` has 1-hour granularity.
+- **Revocation:** logout revokes the current session; logout-all revokes every session of the user. Revoked/expired sessions are rejected immediately (checked on every request).
+- **Guard:** global; every route needs a session unless `@Public()` (health, register, login). Cookie first, then `Authorization: Bearer`.
+- **Throttling:** 5/min per client IP on login and on register (separate buckets), 429 `TOO_MANY_REQUESTS`. Client IP = `req.ip` with Express `trust proxy` = `TRUST_PROXY` (default `loopback`, i.e. the Next.js rewrite on the same host). If the API is deployed behind another proxy, set `TRUST_PROXY` accordingly or all clients share one bucket / IPs can be spoofed.
+- **Validation:** whitelist + forbidNonWhitelisted (unknown fields → 400), emails trimmed + lower-cased, names trimmed.
+- **Verified:** besides the e2e suite, a manual HTTP run against the built API (dev DB, Alex): 401 → login sets the cookie → `/me`, `PATCH /me/settings` with the cookie → second onboarding 409 → logout 204 → 401. This is the same same-origin cookie flow Swagger UI at `/api/docs` uses; Swagger UI itself was not clicked through in a browser.
+
 ## Known gaps
 
 - `docker compose up -d` is untested: Docker isn't installed on the dev machine. Phase 0 was verified against a local PostgreSQL 17 install (phase 0 doesn't touch the DB). Compose + the `ledgerline_test` init script still need a run on a machine with Docker.
 - CI workflow is written but has not run yet (no remote configured).
 - `pnpm e2e` passes with no specs (`--pass-with-no-tests`) until the phase 5 smoke test.
 - `pnpm db:reset` needs explicit user consent when run by an AI agent (Prisma 7 guard). Ran it on 2026-11-24 with the user's consent: drop, both migrations, seed — balances check passed.
-- No test database yet. Phase 2 needs `TEST_DATABASE_URL` (a separate Neon database/branch or local `ledgerline_test`) — must never point at dev data. `apps/api/vitest.config.ts` still hardcodes a localhost URL.
 - `pg` warns that `sslmode=require` will change meaning in pg v9; Neon URLs can switch to `sslmode=verify-full` to keep today's behaviour.
 
 ## Later
+
+- Email verification on sign-up (phase 2 scope excluded it); until then register's `EMAIL_IN_USE` reveals existing accounts.
+- Shared throttler store (Redis) when the API runs as more than one instance.
+- Periodic cleanup of expired / revoked `sessions` rows.
+- A "sessions" list in Settings (user agent, IP, last used) using the stored metadata.

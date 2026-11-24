@@ -7,9 +7,10 @@
  * the golden test.
  */
 
+import type { CategoryTemplateId } from '../src/categories/category-templates.js';
+
 export type AccountKey = 'chk' | 'sav' | 'cash' | 'cc' | 'eur' | 'inr';
-export type CategoryKey =
-  'food' | 'transport' | 'housing' | 'shopping' | 'health' | 'fun' | 'salary' | 'side' | 'interest';
+export type CategoryKey = CategoryTemplateId;
 export type GoalKey = 'g1' | 'g2' | 'g3';
 export type RecurringKey = 'salary' | 'savings' | 'rent' | 'gym' | 'internet' | 'streaming';
 export type SeedCurrency = 'USD' | 'EUR' | 'INR';
@@ -26,25 +27,8 @@ export const SEED_USER = {
   timezone: SEED_TIMEZONE,
 } as const;
 
-export const CATEGORIES: ReadonlyArray<{
-  key: CategoryKey;
-  name: string;
-  type: 'EXPENSE' | 'INCOME';
-  subs: readonly string[];
-}> = [
-  { key: 'food', name: 'Food & Drink', type: 'EXPENSE', subs: ['Groceries', 'Restaurants', 'Coffee'] },
-  { key: 'transport', name: 'Transport', type: 'EXPENSE', subs: ['Fuel', 'Transit', 'Taxi'] },
-  { key: 'housing', name: 'Housing', type: 'EXPENSE', subs: ['Rent', 'Utilities', 'Internet'] },
-  { key: 'shopping', name: 'Shopping', type: 'EXPENSE', subs: ['Clothes', 'Electronics', 'Home'] },
-  { key: 'health', name: 'Health', type: 'EXPENSE', subs: ['Pharmacy', 'Gym', 'Doctor'] },
-  { key: 'fun', name: 'Entertainment', type: 'EXPENSE', subs: ['Streaming', 'Movies', 'Events'] },
-  { key: 'salary', name: 'Salary', type: 'INCOME', subs: ['Monthly pay', 'Bonus'] },
-  { key: 'side', name: 'Freelance', type: 'INCOME', subs: ['Design', 'Consulting'] },
-  { key: 'interest', name: 'Interest', type: 'INCOME', subs: ['Savings', 'Dividends'] },
-];
-
-/** Sub-categories excluded from the heatmap / largest purchase (SPEC §2). */
-export const EXCLUDE_FROM_INSIGHTS: ReadonlySet<string> = new Set(['Housing/Rent']);
+/** Categories come from the shared onboarding templates (src/categories/category-templates.ts). */
+export { CATEGORY_TEMPLATES as CATEGORIES } from '../src/categories/category-templates.js';
 
 /** `baseMinor` = the prototype's displayed balance; opening balances are back-solved from it. */
 export const ACCOUNTS: ReadonlyArray<{

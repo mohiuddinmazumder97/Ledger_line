@@ -8,7 +8,16 @@
     "typecheck": { "dependsOn": ["^build"] },
     "test": {
       "dependsOn": ["^build"],
-      "env": ["DATABASE_URL", "DIRECT_URL", "WEB_ORIGIN", "PORT", "SEED_TODAY"]
+      "env": [
+        "DATABASE_URL",
+        "DIRECT_URL",
+        "TEST_DATABASE_URL",
+        "WEB_ORIGIN",
+        "PORT",
+        "SEED_TODAY",
+        "TRUST_PROXY",
+        "AUTH_THROTTLE_LIMIT"
+      ]
     },
     "e2e": { "cache": false }
   }

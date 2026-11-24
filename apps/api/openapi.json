@@ -1,6 +1,206 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/api/auth/register": {
+      "post": {
+        "operationId": "register",
+        "parameters": [
+          {
+            "name": "X-Client",
+            "required": false,
+            "in": "header",
+            "description": "Send `native` to receive the token in the body instead of a `session` cookie.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "EMAIL_IN_USE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create an account and sign in",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "operationId": "login",
+        "parameters": [
+          {
+            "name": "X-Client",
+            "required": false,
+            "in": "header",
+            "description": "Send `native` to receive the token in the body instead of a `session` cookie.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "INVALID_CREDENTIALS",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Sign in with email and password",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "operationId": "logout",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Revoke the current session",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/logout-all": {
+      "post": {
+        "operationId": "logoutAll",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Revoke every session of the signed-in user",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/api/health": {
       "get": {
         "operationId": "getHealth",
@@ -22,6 +222,219 @@
           "health"
         ]
       }
+    },
+    "/api/me": {
+      "get": {
+        "operationId": "getMe",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "The signed-in user and their preferences",
+        "tags": [
+          "me"
+        ]
+      }
+    },
+    "/api/me/settings": {
+      "patch": {
+        "operationId": "updateSettings",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSettingsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Update base currency, theme, layout, drawer style, timezone",
+        "tags": [
+          "me"
+        ]
+      }
+    },
+    "/api/onboarding/templates": {
+      "get": {
+        "operationId": "getCategoryTemplates",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CategoryTemplateDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "The default categories offered at onboarding",
+        "tags": [
+          "onboarding"
+        ]
+      }
+    },
+    "/api/onboarding": {
+      "post": {
+        "operationId": "completeOnboarding",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OnboardingDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ALREADY_ONBOARDED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Set base currency, create the first account and the chosen categories (once)",
+        "tags": [
+          "onboarding"
+        ]
+      }
     }
   },
   "info": {
@@ -33,7 +446,200 @@
   "tags": [],
   "servers": [],
   "components": {
+    "securitySchemes": {
+      "cookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "session",
+        "description": "Set by POST /api/auth/login (web). Swagger UI on the same origin sends it automatically."
+      },
+      "bearer": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "type": "http",
+        "description": "Native clients: the token from login/register with `X-Client: native`."
+      }
+    },
     "schemas": {
+      "RegisterDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Alex Moreno",
+            "maxLength": 100
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "alex@example.com"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 256,
+            "example": "password123"
+          }
+        },
+        "required": [
+          "name",
+          "email",
+          "password"
+        ]
+      },
+      "Theme": {
+        "type": "string",
+        "enum": [
+          "LIGHT",
+          "DARK",
+          "SYSTEM"
+        ]
+      },
+      "DashboardLayout": {
+        "type": "string",
+        "enum": [
+          "OVERVIEW",
+          "SPLIT",
+          "CALENDAR"
+        ]
+      },
+      "MeDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "example": "Alex Moreno"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "alex@example.com"
+          },
+          "baseCurrency": {
+            "type": "string",
+            "example": "USD",
+            "description": "ISO-4217 code"
+          },
+          "theme": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Theme"
+              }
+            ]
+          },
+          "dashboardLayout": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DashboardLayout"
+              }
+            ]
+          },
+          "drawerStyle": {
+            "type": "string",
+            "enum": [
+              "FORM",
+              "KEYPAD"
+            ],
+            "nullable": true,
+            "description": "null = client default (web: FORM, mobile: KEYPAD)"
+          },
+          "timezone": {
+            "type": "string",
+            "example": "America/New_York",
+            "description": "IANA time zone"
+          },
+          "onboardedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "email",
+          "baseCurrency",
+          "theme",
+          "dashboardLayout",
+          "drawerStyle",
+          "timezone",
+          "onboardedAt"
+        ]
+      },
+      "AuthResponseDto": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/MeDto"
+          },
+          "token": {
+            "type": "string",
+            "description": "Only for native clients (`X-Client: native`). Send as `Authorization: Bearer <token>`."
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Only for native clients."
+          }
+        },
+        "required": [
+          "user"
+        ]
+      },
+      "ApiErrorDto": {
+        "type": "object",
+        "properties": {
+          "statusCode": {
+            "type": "number",
+            "example": 401
+          },
+          "code": {
+            "type": "string",
+            "example": "UNAUTHENTICATED"
+          },
+          "message": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            ],
+            "example": "Sign in to continue."
+          }
+        },
+        "required": [
+          "statusCode",
+          "code",
+          "message"
+        ]
+      },
+      "LoginDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "alex@example.com"
+          },
+          "password": {
+            "type": "string",
+            "example": "password123"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
+      },
       "HealthDto": {
         "type": "object",
         "properties": {
@@ -47,6 +653,168 @@
         },
         "required": [
           "status"
+        ]
+      },
+      "UpdateSettingsDto": {
+        "type": "object",
+        "properties": {
+          "baseCurrency": {
+            "type": "string",
+            "enum": [
+              "USD",
+              "EUR",
+              "INR"
+            ],
+            "example": "EUR"
+          },
+          "theme": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Theme"
+              }
+            ]
+          },
+          "dashboardLayout": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DashboardLayout"
+              }
+            ]
+          },
+          "drawerStyle": {
+            "type": "string",
+            "enum": [
+              "FORM",
+              "KEYPAD"
+            ],
+            "nullable": true,
+            "description": "null resets to the client default"
+          },
+          "timezone": {
+            "type": "string",
+            "example": "Asia/Dhaka"
+          }
+        }
+      },
+      "CategoryType": {
+        "type": "string",
+        "enum": [
+          "EXPENSE",
+          "INCOME"
+        ]
+      },
+      "CategoryTemplateDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "enum": [
+              "food",
+              "transport",
+              "housing",
+              "shopping",
+              "health",
+              "fun",
+              "salary",
+              "side",
+              "interest"
+            ],
+            "example": "food"
+          },
+          "name": {
+            "type": "string",
+            "example": "Food & Drink"
+          },
+          "type": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CategoryType"
+              }
+            ]
+          },
+          "subs": {
+            "example": [
+              "Groceries",
+              "Restaurants",
+              "Coffee"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "type",
+          "subs"
+        ]
+      },
+      "OnboardingAccountDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Everyday Checking",
+            "maxLength": 60
+          },
+          "openingBalance": {
+            "type": "string",
+            "example": "2500",
+            "pattern": "^-?\\d+(\\.\\d+)?$",
+            "description": "Current balance as a decimal string in the base currency (at most its minor digits)."
+          }
+        },
+        "required": [
+          "name",
+          "openingBalance"
+        ]
+      },
+      "OnboardingDto": {
+        "type": "object",
+        "properties": {
+          "baseCurrency": {
+            "type": "string",
+            "enum": [
+              "USD",
+              "EUR",
+              "INR"
+            ],
+            "example": "USD"
+          },
+          "account": {
+            "$ref": "#/components/schemas/OnboardingAccountDto"
+          },
+          "categoryTemplateIds": {
+            "type": "array",
+            "example": [
+              "food",
+              "transport",
+              "housing",
+              "shopping",
+              "salary"
+            ],
+            "items": {
+              "type": "string",
+              "enum": [
+                "food",
+                "transport",
+                "housing",
+                "shopping",
+                "health",
+                "fun",
+                "salary",
+                "side",
+                "interest"
+              ]
+            }
+          }
+        },
+        "required": [
+          "baseCurrency",
+          "account",
+          "categoryTemplateIds"
         ]
       }
     }

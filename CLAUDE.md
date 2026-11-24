@@ -47,7 +47,7 @@ Work is done in phases — see `docs/phases/`. Progress is tracked in `docs/PROG
 - `pnpm db:migrate` (`prisma migrate dev`) / `pnpm db:seed` / `pnpm db:reset` (drop, migrate, seed; seed anchors on `SEED_TODAY`, default `2026-11-22`, and fails unless derived balances equal the prototype)
 - `pnpm --filter @ledgerline/api db:deploy` — apply migrations without resetting (CI, prod); `db:generate` — regenerate the Prisma client (also runs on install)
 - `pnpm gen:api` — write `apps/api/openapi.json` (no server needed) and regenerate `packages/api-client` from it
-- `pnpm lint` / `pnpm typecheck` / `pnpm test` / `pnpm e2e`
+- `pnpm lint` / `pnpm typecheck` / `pnpm test` / `pnpm e2e` — API tests need a test DB: `TEST_DATABASE_URL` in `apps/api/.env` (name must end in `_test`), else local `ledgerline_test`
 - `pnpm format` — Prettier over the repo
 
 ## How to work a phase
