@@ -2,10 +2,14 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { LoggerModule } from 'nestjs-pino';
 import { type Env, validateEnv } from './config/env.js';
+import { AccountsModule } from './accounts/accounts.module.js';
 import { AuthModule } from './auth/auth.module.js';
+import { CategoriesModule } from './categories/categories.module.js';
+import { FxModule } from './fx/fx.module.js';
 import { HealthModule } from './health/health.module.js';
 import { OnboardingModule } from './onboarding/onboarding.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
+import { TransactionsModule } from './transactions/transactions.module.js';
 import { UsersModule } from './users/users.module.js';
 
 @Module({
@@ -31,6 +35,10 @@ import { UsersModule } from './users/users.module.js';
     HealthModule,
     UsersModule,
     OnboardingModule,
+    FxModule,
+    AccountsModule,
+    CategoriesModule,
+    TransactionsModule,
   ],
 })
 export class AppModule {}

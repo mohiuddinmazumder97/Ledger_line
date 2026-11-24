@@ -95,3 +95,30 @@ export function convert(minor: bigint, from: string, to: string, rate: RateLike)
   const { scaled, scale } = parseRate(rate);
   return divRoundHalfEven(minor * scaled * 10n ** toDigits, scale * 10n ** fromDigits);
 }
+
+/** An exact positive rational, used for cross rates (no intermediate rounding). */
+export interface Fraction {
+  num: bigint;
+  den: bigint;
+}
+
+/** "0.92592593" → { num: 92592593n, den: 100000000n }. Positive decimals only. */
+export function decimalToFraction(rate: RateLike): Fraction {
+  const { scaled, scale } = parseRate(rate);
+  return { num: scaled, den: scale };
+}
+
+/** num/den as a decimal string with `digits` fraction digits, banker's rounding. */
+export function fractionToDecimal({ num, den }: Fraction, digits: number): string {
+  const scaled = divRoundHalfEven(num * 10n ** BigInt(digits), den);
+  const s = scaled.toString().padStart(digits + 1, '0');
+  return digits === 0 ? s : `${s.slice(0, s.length - digits)}.${s.slice(s.length - digits)}`;
+}
+
+/** Converts minor units with an exact rational rate (`to` per 1 `from`), banker's rounding. */
+export function convertByFraction(minor: bigint, from: string, to: string, rate: Fraction): bigint {
+  const fromDigits = BigInt(minorDigits(from));
+  const toDigits = BigInt(minorDigits(to));
+  if (from === to) return minor;
+  return divRoundHalfEven(minor * rate.num * 10n ** toDigits, rate.den * 10n ** fromDigits);
+}

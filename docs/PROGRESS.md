@@ -1,18 +1,18 @@
 # Progress
 
-| Phase                                          | Status      | Date       | Notes                                                                                                                                                 |
-| ---------------------------------------------- | ----------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0 Foundations                                  | done        | 2026-11-24 | Monorepo, Nest + Next wired, health + Swagger, CI. Docker compose written but not run locally (no Docker on dev machine).                             |
-| 1 Database & seed                              | done        | 2026-11-24 | Prisma 7 schema + migrations, money utils, BigInt→string, seed + golden test. Seeded on Neon; derived balances match the prototype.                   |
-| 2 Auth & onboarding API                        | done        | 2026-11-24 | Opaque DB sessions (cookie + bearer), register/login/logout(-all), throttling, me/settings, onboarding, assertOwned. 132 API tests on a Neon test DB. |
-| 3 Ledger API                                   | not started |            |                                                                                                                                                       |
-| 4 Planning, reports & recurring API            | not started |            |                                                                                                                                                       |
-| 5 Web foundation & auth UI                     | not started |            |                                                                                                                                                       |
-| 6 Dashboard & Accounts                         | not started |            |                                                                                                                                                       |
-| 7a New record drawer (create)                  | not started |            |                                                                                                                                                       |
-| 7b Transactions list, edit & delete            | not started |            |                                                                                                                                                       |
-| 8 Budgets, Goals, Debts, Categories, Settings  | not started |            |                                                                                                                                                       |
-| 9 Receipts, password reset, hardening & deploy | not started |            |                                                                                                                                                       |
+| Phase                                          | Status      | Date       | Notes                                                                                                                                                                                                              |
+| ---------------------------------------------- | ----------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 0 Foundations                                  | done        | 2026-11-24 | Monorepo, Nest + Next wired, health + Swagger, CI. Docker compose written but not run locally (no Docker on dev machine).                                                                                          |
+| 1 Database & seed                              | done        | 2026-11-24 | Prisma 7 schema + migrations, money utils, BigInt→string, seed + golden test. Seeded on Neon; derived balances match the prototype.                                                                                |
+| 2 Auth & onboarding API                        | done        | 2026-11-24 | Opaque DB sessions (cookie + bearer), register/login/logout(-all), throttling, me/settings, onboarding, assertOwned. 132 API tests on a Neon test DB.                                                              |
+| 3 Ledger API                                   | done        | 2026-11-24 | FX (cross rates via USD), accounts with derived balances + archive, categories/sub-categories, transactions (splits, transfers, recurring #1, filters, cursor, summary, CSV). Alex's balances via API = prototype. |
+| 4 Planning, reports & recurring API            | not started |            |                                                                                                                                                                                                                    |
+| 5 Web foundation & auth UI                     | not started |            |                                                                                                                                                                                                                    |
+| 6 Dashboard & Accounts                         | not started |            |                                                                                                                                                                                                                    |
+| 7a New record drawer (create)                  | not started |            |                                                                                                                                                                                                                    |
+| 7b Transactions list, edit & delete            | not started |            |                                                                                                                                                                                                                    |
+| 8 Budgets, Goals, Debts, Categories, Settings  | not started |            |                                                                                                                                                                                                                    |
+| 9 Receipts, password reset, hardening & deploy | not started |            |                                                                                                                                                                                                                    |
 
 ## Decisions
 
@@ -105,12 +105,34 @@ Phase 2 (2026-11-24):
 - **Validation:** whitelist + forbidNonWhitelisted (unknown fields → 400), emails trimmed + lower-cased, names trimmed.
 - **Verified:** besides the e2e suite, a manual HTTP run against the built API (dev DB, Alex): 401 → login sets the cookie → `/me`, `PATCH /me/settings` with the cookie → second onboarding 409 → logout 204 → 401. This is the same same-origin cookie flow Swagger UI at `/api/docs` uses; Swagger UI itself was not clicked through in a browser.
 
+Phase 3 (2026-11-24):
+
+- FX: `RateTable` loads all USD→X rows once per request; lookups by binary search (latest on/before the date, else latest). Cross rates are exact fractions (`rate(USD→B) / rate(USD→A)`), so conversions don't compound rounding. Rate "date" = the instant's UTC calendar day. Missing currency → 422 `FX_RATE_UNAVAILABLE`.
+- Transfers between currencies store `fxRate` rounded to 8 digits (Decimal(18,8)), and `toAmountMinor` uses the exact cross rate at the transaction date. €→$ at the seed rate shows `1.08000000`.
+- Balances: one SQL CTE (opening + income − expense − transfers out + `toAmountMinor` in), soft-deleted rows ignored. `balanceInBaseMinor` uses the latest rate. Archived accounts are hidden unless `?includeArchived=true`; archiving needs a derived balance of exactly 0; archived accounts/categories/goals refuse new or edited records (409 `*_ARCHIVED`).
+- Account `currency` is editable only until the account has any transaction (incl. soft-deleted, which still point at it): 409 `ACCOUNT_CURRENCY_LOCKED`. Opening balance isn't editable after creation (not in scope).
+- Categories: type is fixed after creation; names unique per (user, type) among non-archived, case-insensitive; new categories get a "General" sub-category. Sub-categories: unique per category (case-insensitive), deletable only when no transaction (even soft-deleted) or rule uses them (`SUBCATEGORY_IN_USE`) and never the last one (`SUBCATEGORY_LAST`). Sub-category routes are nested: `/api/categories/:id/subcategories/:subId`.
+- Transactions: one validator (`resolve`) for create and edit; its lookups (account, destination, category + first sub-category, sub-category, budget, goal) run in parallel — one round trip.
+  - `budgetId`: omitted / `'auto'` → AUTO; `null` → NONE; id → EXPLICIT (expenses only). Non-expense rows store AUTO (harmless; reports count expenses only).
+  - Splits: expense only; amount optional (must equal the sum if sent); not combinable with `recurring` (400 `SPLIT_NOT_RECURRING`, agreed) or a top-level category; note/tags/budget/goal/date apply to every row; returned in request order.
+  - Recurring: the rule stores the full template (incl. `tagNames`); `nextRunAt` = occurrence #1 + 1 period via `occurrenceAt(anchor, n)` in the user's timezone (month-end clamped from the anchor day, DST-safe) — `src/recurring/schedule.ts`, ready for the phase 4 scheduler.
+  - Edit = merge + full re-validation. Type can switch (agreed) except on split rows (`SPLIT_TYPE_IMMUTABLE`); switching clears what no longer applies (category on transfer, destination on expense/income, explicit budget off expenses). Tags are replaced only when sent. The recurring rule is never touched.
+  - Tags: trimmed, leading `#` dropped, de-duplicated case-insensitively; existing tags reused case-insensitively.
+  - Filters: `from`/`to` are inclusive calendar dates and `month` a calendar month, all in the user's timezone; `month` with `from`/`to` → 400. `accountId` matches source or destination. `q` = case-insensitive contains over note, description, category, sub-category, tag names. Cursor = opaque base64url of `[occurredAt, id]`; `limit` 1–200, default 50.
+  - Summary: each row converted at the rate on its own date, then summed; transfers count in `count` only.
+  - CSV: streamed in 500-row pages with backpressure; filters validated before the first byte (bad filters → JSON 400). Every field quoted, quotes doubled, CRLF line ends; dates/times in the user timezone; amounts in the row's currency; type lower-case (prototype); tags space-joined, sorted. Free-text cells starting with `= + - @` get a leading `'` (CSV-injection guard).
+- Malformed ids in paths → 404 with the model's code (`IdParam`), never a DB error.
+- Prisma `relationJoins` preview feature on: includes load in one SQL query (lists were ~7 queries per page).
+- Seed split into `prisma/seed-lib.ts` (`seedDemo(prisma, today)`) + CLI `prisma/seed.ts`; an e2e test seeds the test DB and checks Alex's API balances against the prototype.
+- Vitest `testTimeout` 90 s: from the dev machine each Neon round trip is ~300 ms and a new connection ~2.2 s, so the full API suite takes ~20 min there (local Postgres / CI: seconds).
+
 ## Known gaps
 
 - `docker compose up -d` is untested: Docker isn't installed on the dev machine. Phase 0 was verified against a local PostgreSQL 17 install (phase 0 doesn't touch the DB). Compose + the `ledgerline_test` init script still need a run on a machine with Docker.
 - CI workflow is written but has not run yet (no remote configured).
 - `pnpm e2e` passes with no specs (`--pass-with-no-tests`) until the phase 5 smoke test.
 - `pnpm db:reset` needs explicit user consent when run by an AI agent (Prisma 7 guard). Ran it on 2026-11-24 with the user's consent: drop, both migrations, seed — balances check passed.
+- Full API suite is slow against Neon from the dev machine (~300 ms per round trip). Consider a local Postgres for `TEST_DATABASE_URL` once Docker or a local role is available.
 - `pg` warns that `sslmode=require` will change meaning in pg v9; Neon URLs can switch to `sslmode=verify-full` to keep today's behaviour.
 
 ## Later
@@ -118,4 +140,5 @@ Phase 2 (2026-11-24):
 - Email verification on sign-up (phase 2 scope excluded it); until then register's `EMAIL_IN_USE` reveals existing accounts.
 - Shared throttler store (Redis) when the API runs as more than one instance.
 - Periodic cleanup of expired / revoked `sessions` rows.
+- Editing an account's opening balance; un-archiving accounts / categories.
 - A "sessions" list in Settings (user agent, IP, last used) using the stored metadata.

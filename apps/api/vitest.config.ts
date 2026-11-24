@@ -23,7 +23,7 @@ export default defineConfig({
     // DB tests share one database and truncate it between tests.
     fileParallelism: false,
     // Generous: the test DB may be a hosted Postgres (Neon) with ~200 ms round trips.
-    testTimeout: 30_000,
+    testTimeout: 90_000,
     hookTimeout: 120_000,
     env: {
       NODE_ENV: 'test',
